@@ -1,0 +1,81 @@
+using Microsoft.EntityFrameworkCore;
+using Reddit;
+using Reddit.Models;
+using Reddit.Repositories;
+
+public class UnitTest1
+{
+    private ApplicationDbContext CreateContext()
+    {
+        var SomehowDB = Guid.NewGuid().ToString();
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: SomehowDB).Options;
+
+        var context = new ApplicationDbContext(options);
+        context.Database.EnsureDeleted();
+        context.Database.EnsureCreated();
+
+        context.Posts.AddRange(
+            new Post { Id = 1, Title = "First Post", Content = "Content from first post or something", Upvotes = 10, Downvotes = 2},
+            new Post { Id = 2, Title = "Second Post", Content = "Content from second post or something", Upvotes = 5, Downvotes = 1},
+            new Post { Id = 3, Title = "Third Post", Content = "Content from third post or something", Upvotes = 20, Downvotes = 5}
+            );
+
+        context.SaveChanges();
+        return context;
+    }
+
+    [Fact]
+    public async Task GetPosts_ReturnPagedPosts()
+    {
+        using var context = CreateContext();
+        var repository = new PostsRepository( context );
+        var pagedPosts = await repository.GetPosts(page: 1, pageSize: 2, searchTerm: null, SortTerm: null);
+        
+        Assert.Equal(2, pagedPosts.Items.Count);
+        Assert.Equal(3, pagedPosts.TotalCount);
+
+    }
+
+    [Fact]
+    public async Task GetPosts_SearchTermfiltersPosts()
+    {
+        using var context = CreateContext();
+        var repository = new PostsRepository( context );
+        var pagedPosts = await repository.GetPosts(page: 1, pageSize: 10, searchTerm: "Second", SortTerm: null);
+
+        Assert.Equal(1 , pagedPosts.Items.Count);
+        Assert.Equal("Second Post", pagedPosts.Items.First().Title);
+
+    }
+    [Fact]
+    public async Task GetPosts_PosititvitySortsPosts()
+    {
+        using var context = CreateContext();
+        var repository = new PostsRepository( context );
+        var pagedPosts = await repository.GetPosts(page: 1, pageSize: 10, searchTerm: null, SortTerm: "popular", isAscending: false);
+
+        Assert.Equal(3,pagedPosts.Items.Count);
+        Assert.Equal("Third Post", pagedPosts.Items.First().Title);
+    }
+    [Fact]
+    public async Task GetPostsInvalidPage_ThrowsArgumentOutOfRangeException()
+    {
+        using var context = CreateContext();
+        var repository = new PostsRepository( context );
+
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => repository.GetPosts(page: 1, pageSize: 0, searchTerm: null, SortTerm: null));
+
+        Assert.Equal("pageSize", exception.ParamName);
+    }
+    [Fact]
+    public async Task GetPosts_InvalidPageSize_ThrowsArgumentOutOfRangeException()
+    {
+        using var context = CreateContext();
+        var repository = new PostsRepository( context );
+
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => repository.GetPosts(page: 1, pageSize: 0, searchTerm: null, SortTerm: null));
+        Assert.Equal("pageSize", exception.ParamName);
+    }
+
+}
